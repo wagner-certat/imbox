@@ -6,17 +6,26 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class Imbox(object):
+class Imbox:
 
-    def __init__(self, hostname, username=None, password=None, ssl=True, port=None):
+    def __init__(self, hostname, username=None, password=None, ssl=True,
+                 port=None, ssl_context=None, policy=None):
 
-        self.server = ImapTransport(hostname, ssl=ssl, port=port)
+        self.server = ImapTransport(hostname, ssl=ssl, port=port,
+                                    ssl_context=ssl_context)
         self.hostname = hostname
         self.username = username
         self.password = password
+        self.parser_policy = policy
         self.connection = self.server.connect(username, password)
         logger.info("Connected to IMAP Server with user {username} on {hostname}{ssl}".format(
             hostname=hostname, username=username, ssl=(" over SSL" if ssl else "")))
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.logout()
 
     def logout(self):
         self.connection.close()
@@ -36,7 +45,7 @@ class Imbox(object):
         logger.debug("Fetched message for UID {}".format(int(uid)))
         raw_email = data[0][1]
 
-        email_object = parse_email(raw_email)
+        email_object = parse_email(raw_email, policy=self.parser_policy)
 
         return email_object
 
@@ -73,7 +82,7 @@ class Imbox(object):
             self.connection.select(folder)
             msg = " from folder '{}'".format(folder)
 
-        logger.info("Fetch list of massages{}".format(msg))
+        logger.info("Fetch list of messages{}".format(msg))
         return self.fetch_list(**kwargs)
 
     def folders(self):

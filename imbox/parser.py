@@ -1,6 +1,4 @@
-from __future__ import unicode_literals
-from six import BytesIO, binary_type
-
+import io
 import re
 import email
 import base64
@@ -14,7 +12,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class Struct(object):
+class Struct:
     def __init__(self, **entries):
         self.__dict__.update(entries)
 
@@ -71,7 +69,7 @@ def decode_param(param):
             if type_ == 'Q':
                 value = quopri.decodestring(code)
             elif type_ == 'B':
-                value = base64.decodestring(code)
+                value = base64.decodebytes(code.encode())
             value = str_encode(value, encoding)
             value_results.append(value)
             if value_results:
@@ -92,20 +90,21 @@ def parse_attachment(message_part):
             attachment = {
                 'content-type': message_part.get_content_type(),
                 'size': len(file_data),
-                'content': BytesIO(file_data)
+                'content': io.BytesIO(file_data)
             }
             filename = message_part.get_param('name')
             if filename:
                 attachment['filename'] = filename
 
             for param in dispositions[1:]:
-                name, value = decode_param(param)
+                if param:
+                    name, value = decode_param(param)
 
-                if 'file' in name:
-                    attachment['filename'] = value
+                    if 'file' in name:
+                        attachment['filename'] = value
 
-                if 'create-date' in name:
-                    attachment['create-date'] = value
+                    if 'create-date' in name:
+                        attachment['create-date'] = value
 
             return attachment
 
@@ -116,18 +115,23 @@ def decode_content(message):
     content = message.get_payload(decode=True)
     charset = message.get_content_charset('utf-8')
     try:
-        return content.decode(charset)
+        return content.decode(charset, 'ignore')
     except AttributeError:
         return content
 
 
-def parse_email(raw_email):
-    if isinstance(raw_email, binary_type):
-        raw_email = str_encode(raw_email, 'utf-8')
+def parse_email(raw_email, policy=None):
+    if isinstance(raw_email, bytes):
+        raw_email = str_encode(raw_email, 'utf-8', errors='ignore')
+    if policy is not None:
+        email_parse_kwargs = dict(policy=policy)
+    else:
+        email_parse_kwargs = {}
+
     try:
-        email_message = email.message_from_string(raw_email)
+        email_message = email.message_from_string(raw_email, **email_parse_kwargs)
     except UnicodeEncodeError:
-        email_message = email.message_from_string(raw_email.encode('utf-8'))
+        email_message = email.message_from_string(raw_email.encode('utf-8'), **email_parse_kwargs)
     maintype = email_message.get_content_maintype()
     parsed_email = {}
 
@@ -151,7 +155,7 @@ def parse_email(raw_email):
                 content = decode_content(part)
 
             is_inline = content_disposition is None \
-                or content_disposition == "inline"
+                or content_disposition.startswith("inline")
             if content_type == "text/plain" and is_inline:
                 body['plain'].append(content)
             elif content_type == "text/html" and is_inline:
