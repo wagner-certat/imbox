@@ -34,7 +34,10 @@ Usage
             username='username',
             password='password',
             ssl=True,
-            ssl_context=None) as imbox:
+            ssl_context=None,
+            starttls=False) as imbox:
+        # Get all folders
+        status, folders_with_additional_info = imbox.folders()
 
         # Gets all messages
         all_messages = imbox.messages()
@@ -49,10 +52,13 @@ Usage
         messages_from = imbox.messages(sent_to='martin@amon.cx')
 
         # Messages received before specific date
-        messages_from = imbox.messages(date__lt='31-July-2013')
+        messages_from = imbox.messages(date__lt=datetime.date(2013, 7, 31))
 
         # Messages received after specific date
-        messages_from = imbox.messages(date__gt='30-July-2013')
+        messages_from = imbox.messages(date__gt=datetime.date(2013, 7, 30))
+
+        # Messages received on a specific date
+        messages_from = imbox.messages(date__on=datetime.date(2013, 7, 30))
 
         # Messages from a specific folder
         messages_folder = imbox.messages(folder='Social')
@@ -112,6 +118,14 @@ Usage
             }],
             'subject': u 'Hello John, How are you today'
             }
+
+        # With the message id, several actions on the message are available:
+        # delete the message
+        imbox.delete(uid)
+
+        # mark the message as read
+        imbox.mark_seen(uid)
+        
 
 
 Changelog
